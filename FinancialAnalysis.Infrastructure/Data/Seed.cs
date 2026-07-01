@@ -1,4 +1,3 @@
-using FinancialAnalysis.Core.Interfaces;
 using FinancialAnalysis.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,11 +10,10 @@ public static class SeedData
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var providers = scope.ServiceProvider.GetServices<IDataProvider>();
 
         Console.WriteLine("Начинаем загрузку инструментов...");
 
-        // 1. Сначала добавляем базовые криптовалюты (если их нет)
+        // 1. Добавляем базовые криптовалюты (если их нет)
         var cryptoInstruments = new List<Instrument>
         {
             new() { Symbol = "BTCUSDT", Name = "Bitcoin", Exchange = "Binance", Type = "Crypto", Currency = "USD", IsActive = true },
@@ -32,30 +30,26 @@ public static class SeedData
             }
         }
 
-        // 2. Загружаем инструменты из всех провайдеров (акции США и РФ)
-        var allInstruments = new List<Instrument>();
-
-        foreach (var provider in providers)
+        // 2. Добавляем акции США (Alpha Vantage) — только те, которых нет в БД
+        var usStocks = new List<Instrument>
         {
-            try
-            {
-                var instruments = await provider.FetchInstrumentsAsync();
-                allInstruments.AddRange(instruments);
-                Console.WriteLine($"Загружено {instruments.Count} инструментов из {provider.ProviderName}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка загрузки из {provider.ProviderName}: {ex.Message}");
-            }
-        }
+            new() { Symbol = "AAPL", Name = "Apple Inc.", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "NVDA", Name = "NVIDIA Corp.", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "TSLA", Name = "Tesla Inc.", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "MSFT", Name = "Microsoft Corp.", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "AMZN", Name = "Amazon.com Inc.", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "GOOGL", Name = "Alphabet Inc.", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "META", Name = "Meta Platforms", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "NFLX", Name = "Netflix Inc.", Exchange = "NASDAQ", Type = "Stock", Currency = "USD", IsActive = true },
+            new() { Symbol = "IBM", Name = "IBM Corp.", Exchange = "NYSE", Type = "Stock", Currency = "USD", IsActive = true },
+        };
 
-        // 3. Добавляем только те, которых еще нет в БД
-        foreach (var instrument in allInstruments.DistinctBy(i => i.Symbol))
+        foreach (var instrument in usStocks)
         {
             if (!await context.Instruments.AnyAsync(i => i.Symbol == instrument.Symbol))
             {
                 await context.Instruments.AddAsync(instrument);
-                Console.WriteLine($"Добавлен инструмент: {instrument.Symbol} ({instrument.Exchange})");
+                Console.WriteLine($"Добавлена акция США: {instrument.Symbol}");
             }
             else
             {
@@ -63,6 +57,7 @@ public static class SeedData
             }
         }
 
+        // 3. Сохраняем изменения
         await context.SaveChangesAsync();
         Console.WriteLine($"ИТОГО инструментов в БД: {await context.Instruments.CountAsync()}");
     }

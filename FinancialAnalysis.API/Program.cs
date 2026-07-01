@@ -30,9 +30,9 @@ builder.Services.AddHttpClient<AlphaVantageProvider>(client =>
 
 // Регистрация провайдеров как Scoped (или Transient)
 builder.Services.AddScoped<IDataProvider, AlphaVantageProvider>();
-builder.Services.AddScoped<TInvestProvider>();
-builder.Services.AddScoped<IDataProvider, TInvestProvider>();
-
+//builder.Services.AddScoped<TInvestProvider>();
+//builder.Services.AddScoped<IDataProvider, TInvestProvider>();
+//builder.Services.AddHostedService<DataUpdateService>();
 // Регистрация агрегатора
 builder.Services.AddScoped<DataAggregator>();
 // 2. Настройка PostgreSQL

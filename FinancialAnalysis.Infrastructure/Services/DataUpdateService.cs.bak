@@ -1,0 +1,121 @@
+using FinancialAnalysis.Core.Services;
+using FinancialAnalysis.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
+// Убираем Microsoft.Extensions.Hosting — он не нужен явно
+
+namespace FinancialAnalysis.Infrastructure.Services;
+
+public class DataUpdateService : IHostedService, IDisposable
+{
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<DataUpdateService> _logger;
+    private readonly string[] _symbols = { "AAPL", "NVDA", "TSLA", "MSFT", "AMZN", "GOOGL", "META", "NFLX", "IBM" };
+    private readonly int _updateIntervalMinutes = 10;
+    private Timer? _timer;
+
+    public DataUpdateService(IServiceProvider serviceProvider, ILogger<DataUpdateService> logger)
+    {
+        _serviceProvider = serviceProvider;
+        _logger = logger;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("🚀 DataUpdateService запущен");
+        _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(_updateIntervalMinutes));
+        return Task.CompletedTask;
+    }
+
+    private async void DoWork(object? state)
+    {
+        try
+        {
+            await UpdateDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Ошибка в DataUpdateService");
+        }
+    }
+
+    private async Task UpdateDataAsync()
+    {
+        _logger.LogInformation($"🔄 Запущено обновление данных ({DateTime.Now})");
+
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var aggregator = scope.ServiceProvider.GetRequiredService<DataAggregator>();
+
+        var updatedCount = 0;
+
+        foreach (var symbol in _symbols)
+        {
+            try
+            {
+                _logger.LogInformation($"  📥 Обновление {symbol}...");
+
+                var instrument = await context.Instruments
+                    .FirstOrDefaultAsync(i => i.Symbol == symbol);
+
+                if (instrument == null)
+                {
+                    _logger.LogWarning($"  ⚠️ Инструмент {symbol} не найден в БД");
+                    continue;
+                }
+
+                var freshData = await aggregator.GetHistoricalDataAsync(symbol, "daily", 100);
+
+                if (!freshData.Any())
+                {
+                    _logger.LogWarning($"  ⚠️ Нет данных для {symbol}");
+                    continue;
+                }
+
+                var newCount = 0;
+                foreach (var price in freshData)
+                {
+                    price.InstrumentId = instrument.InstrumentId;
+                    price.Timeframe = "daily";
+
+                    var existing = await context.HistoricalPrices
+                        .FirstOrDefaultAsync(h => h.InstrumentId == instrument.InstrumentId
+                            && h.Time == price.Time
+                            && h.Timeframe == "daily");
+
+                    if (existing == null)
+                    {
+                        await context.HistoricalPrices.AddAsync(price);
+                        newCount++;
+                    }
+                }
+
+                await context.SaveChangesAsync();
+                updatedCount += newCount;
+                _logger.LogInformation($"  ✅ {symbol}: добавлено {newCount} новых свечей");
+
+                await Task.Delay(2000);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"  ❌ Ошибка обновления {symbol}");
+            }
+        }
+
+        _logger.LogInformation($"✅ Обновление завершено: добавлено {updatedCount} свечей");
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("🛑 DataUpdateService остановлен");
+        _timer?.Change(Timeout.Infinite, 0);
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

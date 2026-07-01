@@ -25,4 +25,15 @@ public class InstrumentsController : ControllerBase
         
         return Ok(instruments);
     }
+    [HttpGet("symbols")]
+public async Task<ActionResult<IEnumerable<string>>> GetSymbols()
+{
+    var symbols = await _context.Instruments
+        .Where(i => i.IsActive)
+        .Select(i => i.Symbol)
+        .OrderBy(s => s)
+        .ToListAsync();
+    
+    return Ok(symbols);
+}
 }
