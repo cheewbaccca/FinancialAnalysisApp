@@ -1,0 +1,210 @@
+using System.Globalization;
+using FinancialAnalysis.Core.Interfaces;
+using FinancialAnalysis.Core.Models;
+using Tinkoff.InvestApi;
+using Tinkoff.InvestApi.V1;
+using Grpc.Core;
+using Microsoft.Extensions.Configuration;
+using Google.Protobuf.WellKnownTypes;
+using CoreInstrument = FinancialAnalysis.Core.Models.Instrument;
+
+namespace FinancialAnalysis.Infrastructure.Services;
+
+public class TInvestProvider : IDataProvider
+{
+    private readonly InvestApiClient _client;
+    private readonly Dictionary<string, string> _figiCache = new();
+    public string ProviderName => "T-Invest";
+
+    public TInvestProvider(IConfiguration configuration)
+    {
+        var token = configuration["ExternalApis:TInvest:Token"]
+                   ?? throw new Exception("T-Invest токен не найден в конфигурации");
+        
+        // Настройка таймаута в миллисекундах (30 секунд = 30000 мс)
+        var settings = new InvestApiSettings
+        {
+            Timeout = 30000 // ← int, миллисекунды
+        };
+        
+        _client = InvestApiClientFactory.Create(token, false);
+        Console.WriteLine("🔵 T-Invest: Клиент создан с таймаутом 30 сек");
+    }
+
+    public bool SupportsSymbol(string symbol)
+    {
+        return true;
+    }
+
+    public async Task<List<HistoricalPrice>> FetchHistoricalDataAsync(
+        string symbol,
+        string timeframe = "daily",
+        int limit = 100)
+    {
+        try
+        {
+            Console.WriteLine($"🟢 T-Invest: Запрос данных для {symbol}");
+
+            var figi = await GetFigiAsync(symbol);
+            if (string.IsNullOrEmpty(figi))
+            {
+                Console.WriteLine($"⚠️ T-Invest: FIGI не найден для {symbol}");
+                return new List<HistoricalPrice>();
+            }
+
+            Console.WriteLine($"✅ T-Invest: FIGI для {symbol} = {figi}");
+
+            var interval = timeframe.ToLower() switch
+            {
+                "1min" => CandleInterval._1Min,
+                "5min" => CandleInterval._5Min,
+                "15min" => CandleInterval._15Min,
+                "1h" => CandleInterval.Hour,
+                "daily" => CandleInterval.Day,
+                "week" => CandleInterval.Week,
+                "month" => CandleInterval.Month,
+                _ => CandleInterval.Day
+            };
+
+            // Запрашиваем данные за последние N дней
+            var daysOffset = limit * 2;
+            var fromTimestamp = Timestamp.FromDateTime(DateTime.UtcNow.AddDays(-daysOffset));
+            var toTimestamp = Timestamp.FromDateTime(DateTime.UtcNow);
+
+            var request = new GetCandlesRequest
+            {
+                InstrumentId = figi,
+                Interval = interval,
+                From = fromTimestamp,
+                To = toTimestamp
+            };
+
+            var response = await _client.MarketData.GetCandlesAsync(request);
+
+            if (response.Candles.Count == 0)
+            {
+                Console.WriteLine($"⚠️ T-Invest: Нет свечей для {symbol}");
+                return new List<HistoricalPrice>();
+            }
+
+            var prices = new List<HistoricalPrice>();
+            var take = Math.Min(limit, response.Candles.Count);
+            
+            foreach (var candle in response.Candles.TakeLast(take))
+            {
+                prices.Add(new HistoricalPrice
+                {
+                    Time = candle.Time.ToDateTime(),
+                    Open = (decimal)candle.Open,
+                    High = (decimal)candle.High,
+                    Low = (decimal)candle.Low,
+                    Close = (decimal)candle.Close,
+                    Volume = (decimal)candle.Volume,
+                    Timeframe = timeframe
+                });
+            }
+
+            Console.WriteLine($"✅ T-Invest: Загружено {prices.Count} свечей для {symbol}");
+            return prices.OrderBy(p => p.Time).ToList();
+        }
+        catch (RpcException ex)
+        {
+            // Обработка ошибки 30006
+            if (ex.StatusCode == StatusCode.InvalidArgument && ex.Message.Contains("30006"))
+            {
+                Console.WriteLine($"❌ T-Invest: Инструмент {symbol} не найден (код 30006)");
+                return new List<HistoricalPrice>();
+            }
+            
+            Console.WriteLine($"❌ T-Invest gRPC ошибка: {ex.StatusCode} - {ex.Message}");
+            return new List<HistoricalPrice>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ T-Invest ошибка: {ex.Message}");
+            return new List<HistoricalPrice>();
+        }
+    }
+
+    public async Task<List<CoreInstrument>> FetchInstrumentsAsync()
+    {
+        try
+        {
+            Console.WriteLine("🟢 T-Invest: Загрузка списка инструментов");
+            
+            var sharesResponse = await _client.Instruments.SharesAsync(new InstrumentsRequest());
+            var instruments = new List<CoreInstrument>();
+
+            foreach (var share in sharesResponse.Instruments)
+            {
+                if (share.TradingStatus == SecurityTradingStatus.NormalTrading)
+                {
+                    instruments.Add(new CoreInstrument
+                    {
+                        Symbol = share.Ticker,
+                        Name = share.Name,
+                        Exchange = "MOEX",
+                        Type = "Stock",
+                        Currency = share.Currency,
+                        IsActive = true
+                    });
+                    
+                    _figiCache[share.Ticker] = share.Figi;
+                }
+            }
+
+            Console.WriteLine($"✅ T-Invest: Загружено {instruments.Count} инструментов");
+            return instruments;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ T-Invest ошибка загрузки инструментов: {ex.Message}");
+            return new List<CoreInstrument>();
+        }
+    }
+
+    private async Task<string> GetFigiAsync(string symbol)
+    {
+        if (_figiCache.TryGetValue(symbol, out var figi))
+            return figi;
+
+        try
+        {
+            // Ищем через FindInstrument
+            var findRequest = new FindInstrumentRequest { Query = symbol };
+            var findResponse = await _client.Instruments.FindInstrumentAsync(findRequest);
+            
+            if (findResponse.Instruments != null && findResponse.Instruments.Any())
+            {
+                var exactMatch = findResponse.Instruments.FirstOrDefault(i => i.Ticker == symbol);
+                if (exactMatch != null)
+                {
+                    _figiCache[symbol] = exactMatch.Figi;
+                    return exactMatch.Figi;
+                }
+                
+                var found = findResponse.Instruments.First();
+                _figiCache[symbol] = found.Figi;
+                return found.Figi;
+            }
+            
+            // Если не нашли, пробуем через ShareBy
+            var shareRequest = new InstrumentRequest { Id = symbol };
+            var shareResponse = await _client.Instruments.ShareByAsync(shareRequest);
+            
+            if (shareResponse.Instrument != null)
+            {
+                _figiCache[symbol] = shareResponse.Instrument.Figi;
+                return shareResponse.Instrument.Figi;
+            }
+            
+            Console.WriteLine($"⚠️ T-Invest: Инструмент {symbol} не найден");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️ T-Invest: Ошибка поиска FIGI для {symbol}: {ex.Message}");
+            return null;
+        }
+    }
+}
