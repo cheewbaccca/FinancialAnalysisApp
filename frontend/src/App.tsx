@@ -31,7 +31,8 @@ interface SMASetting {
 }
 
 function App() {
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  // Переключение темы убрали — приложение теперь всегда тёмное.
+  const theme: 'dark' | 'light' = 'dark';
 
   // ===== Авторизация =====
   const [user, setUser] = useState<AuthUser | null>(() => getStoredToken() ? getStoredUser() : null);
@@ -89,7 +90,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, timeframe]);
 
-  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
   const bg = theme === 'dark' ? '#131722' : '#f5f5f5';
   const text = theme === 'dark' ? '#fff' : '#1e222d';
 
@@ -212,7 +212,7 @@ function App() {
 
   return (
     <div style={{ background: bg, minHeight: '100vh', color: text }}>
-      <Header theme={theme} toggleTheme={toggleTheme} user={user} onLogout={handleLogout} />
+      <Header theme={theme} user={user} onLogout={handleLogout} />
 
       {loadingSymbols ? (
         <div style={{ padding: '40px' }}>Загрузка списка инструментов...</div>

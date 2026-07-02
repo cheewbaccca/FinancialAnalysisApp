@@ -1,16 +1,15 @@
 // src/components/Header.tsx
 import React from 'react';
-import { TrendingUp, Moon, Sun, LogOut } from 'lucide-react';
+import { TrendingUp, LogOut } from 'lucide-react';
 import type { AuthUser } from '../types';
 
 interface HeaderProps {
   theme: 'dark' | 'light';
-  toggleTheme: () => void;
   user?: AuthUser | null;
   onLogout?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ theme, toggleTheme, user, onLogout }) => {
+export const Header: React.FC<HeaderProps> = ({ theme, user, onLogout }) => {
   const isDark = theme === 'dark';
   return (
     <header style={{
@@ -45,23 +44,6 @@ export const Header: React.FC<HeaderProps> = ({ theme, toggleTheme, user, onLogo
             {user.email}
           </span>
         )}
-        <button
-          onClick={toggleTheme}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '8px',
-            background: 'none',
-            border: `1px solid ${isDark ? '#2a2e39' : '#e0e0e0'}`,
-            borderRadius: '6px',
-            color: isDark ? '#d1d4dc' : '#1e222d',
-            cursor: 'pointer',
-          }}
-          title="Сменить тему"
-        >
-          {isDark ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
         {user && onLogout && (
           <button
             onClick={onLogout}
