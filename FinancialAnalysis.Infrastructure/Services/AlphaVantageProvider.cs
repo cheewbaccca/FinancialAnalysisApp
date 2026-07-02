@@ -80,13 +80,13 @@ public class AlphaVantageProvider : IDataProvider
             // Формируем URL
             var url = $"https://www.alphavantage.co/query?function={function}&symbol={symbol}{intervalParam}&outputsize=compact&apikey={_apiKey}";
             
-            Console.WriteLine($"🟢 Alpha Vantage: Запрос к {url}");
+            Console.WriteLine($"Alpha Vantage: Запрос к {url}");
 
             var response = await _httpClient.GetAsync(url);
             var json = await response.Content.ReadAsStringAsync();
 
             // Логируем ответ для отладки
-            Console.WriteLine($"📨 Ответ Alpha Vantage (первые 300 символов): {json.Substring(0, Math.Min(300, json.Length))}");
+            Console.WriteLine($"Ответ Alpha Vantage (первые 300 символов): {json.Substring(0, Math.Min(300, json.Length))}");
 
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
@@ -112,12 +112,12 @@ public class AlphaVantageProvider : IDataProvider
                     if (root.TryGetProperty("Time Series (1min)", out var altSeries))
                     {
                         timeSeries = altSeries;
-                        Console.WriteLine("⚠️ Используем Time Series (1min) вместо (60min)");
+                        Console.WriteLine("Используем Time Series (1min) вместо (60min)");
                     }
                     else if (root.TryGetProperty("Time Series (5min)", out var altSeries5))
                     {
                         timeSeries = altSeries5;
-                        Console.WriteLine("⚠️ Используем Time Series (5min) вместо (60min)");
+                        Console.WriteLine("Используем Time Series (5min) вместо (60min)");
                     }
                     else
                     {
@@ -157,16 +157,16 @@ public class AlphaVantageProvider : IDataProvider
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"⚠️ Ошибка парсинга строки: {ex.Message}");
+                    Console.WriteLine($"Ошибка парсинга строки: {ex.Message}");
                 }
             }
 
-            Console.WriteLine($"✅ Alpha Vantage: Загружено {prices.Count} свечей для {symbol} ({timeframe})");
+            Console.WriteLine($"Alpha Vantage: Загружено {prices.Count} свечей для {symbol} ({timeframe})");
             return prices.OrderBy(p => p.Time).ToList();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Ошибка Alpha Vantage: {ex.Message}");
+            Console.WriteLine($"Ошибка Alpha Vantage: {ex.Message}");
             throw;
         }
     }

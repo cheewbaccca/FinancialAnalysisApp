@@ -24,7 +24,7 @@ public class DataUpdateService : IHostedService, IDisposable
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("🚀 DataUpdateService запущен");
+        _logger.LogInformation("DataUpdateService запущен");
         _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(_updateIntervalMinutes));
         return Task.CompletedTask;
     }
@@ -37,13 +37,13 @@ public class DataUpdateService : IHostedService, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Ошибка в DataUpdateService");
+            _logger.LogError(ex, "Ошибка в DataUpdateService");
         }
     }
 
     private async Task UpdateDataAsync()
     {
-        _logger.LogInformation($"🔄 Запущено обновление данных ({DateTime.Now})");
+        _logger.LogInformation($"Запущено обновление данных ({DateTime.Now})");
 
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -55,14 +55,14 @@ public class DataUpdateService : IHostedService, IDisposable
         {
             try
             {
-                _logger.LogInformation($"  📥 Обновление {symbol}...");
+                _logger.LogInformation($"  Обновление {symbol}...");
 
                 var instrument = await context.Instruments
                     .FirstOrDefaultAsync(i => i.Symbol == symbol);
 
                 if (instrument == null)
                 {
-                    _logger.LogWarning($"  ⚠️ Инструмент {symbol} не найден в БД");
+                    _logger.LogWarning($"  Инструмент {symbol} не найден в БД");
                     continue;
                 }
 
@@ -70,7 +70,7 @@ public class DataUpdateService : IHostedService, IDisposable
 
                 if (!freshData.Any())
                 {
-                    _logger.LogWarning($"  ⚠️ Нет данных для {symbol}");
+                    _logger.LogWarning($"  Нет данных для {symbol}");
                     continue;
                 }
 
@@ -94,22 +94,22 @@ public class DataUpdateService : IHostedService, IDisposable
 
                 await context.SaveChangesAsync();
                 updatedCount += newCount;
-                _logger.LogInformation($"  ✅ {symbol}: добавлено {newCount} новых свечей");
+                _logger.LogInformation($"  {symbol}: добавлено {newCount} новых свечей");
 
                 await Task.Delay(2000);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"  ❌ Ошибка обновления {symbol}");
+                _logger.LogError(ex, $"  Ошибка обновления {symbol}");
             }
         }
 
-        _logger.LogInformation($"✅ Обновление завершено: добавлено {updatedCount} свечей");
+        _logger.LogInformation($"Обновление завершено: добавлено {updatedCount} свечей");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("🛑 DataUpdateService остановлен");
+        _logger.LogInformation("DataUpdateService остановлен");
         _timer?.Change(Timeout.Infinite, 0);
         return Task.CompletedTask;
     }

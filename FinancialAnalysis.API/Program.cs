@@ -1,7 +1,7 @@
 using FinancialAnalysis.Infrastructure.Data;
-using FinancialAnalysis.Infrastructure.Services;   // ← Для AlphaVantageProvider и MoexProvider
-using FinancialAnalysis.Core.Interfaces;          // ← Для IDataProvider
-using FinancialAnalysis.Core.Services;            // ← Для DataAggregator
+using FinancialAnalysis.Infrastructure.Services;
+using FinancialAnalysis.Core.Interfaces;
+using FinancialAnalysis.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -35,6 +35,12 @@ builder.Services.AddScoped<IDataProvider, AlphaVantageProvider>();
 //builder.Services.AddHostedService<DataUpdateService>();
 // Регистрация агрегатора
 builder.Services.AddScoped<DataAggregator>();
+
+// Регистрация сервисов приложения
+builder.Services.AddScoped<IHistoricalPriceService, HistoricalPriceService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IWatchlistService, WatchlistService>();
+
 // 2. Настройка PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -83,7 +89,7 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     dbContext.Database.Migrate();
-    
+
     // Заполняем базу данными
     await SeedData.InitializeAsync(app.Services);
 }

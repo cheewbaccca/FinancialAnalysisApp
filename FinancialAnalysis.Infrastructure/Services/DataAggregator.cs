@@ -26,7 +26,7 @@ public class DataAggregator
         if (provider == null)
             throw new NotSupportedException($"Нет провайдера для символа {symbol}");
 
-        Console.WriteLine($"📥 Загружаем {symbol} из {provider.ProviderName} (таймфрейм: {timeframe}, лимит: {limit})");
+        Console.WriteLine($"Загружаем {symbol} из {provider.ProviderName} (таймфрейм: {timeframe}, лимит: {limit})");
         
         // Передаем таймфрейм и лимит в провайдер
         return await provider.FetchHistoricalDataAsync(symbol, timeframe, limit);
@@ -45,11 +45,11 @@ public class DataAggregator
             {
                 var instruments = await provider.FetchInstrumentsAsync();
                 allInstruments.AddRange(instruments);
-                Console.WriteLine($"📋 Загружено {instruments.Count} инструментов из {provider.ProviderName}");
+                Console.WriteLine($"Загружено {instruments.Count} инструментов из {provider.ProviderName}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Ошибка загрузки из {provider.ProviderName}: {ex.Message}");
+                Console.WriteLine($"Ошибка загрузки из {provider.ProviderName}: {ex.Message}");
             }
         }
         

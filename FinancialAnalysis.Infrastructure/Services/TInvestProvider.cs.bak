@@ -24,11 +24,11 @@ public class TInvestProvider : IDataProvider
         // Настройка таймаута в миллисекундах (30 секунд = 30000 мс)
         var settings = new InvestApiSettings
         {
-            Timeout = 30000 // ← int, миллисекунды
+            Timeout = 30000 // int, миллисекунды
         };
         
         _client = InvestApiClientFactory.Create(token, false);
-        Console.WriteLine("🔵 T-Invest: Клиент создан с таймаутом 30 сек");
+        Console.WriteLine("T-Invest: Клиент создан с таймаутом 30 сек");
     }
 
     public bool SupportsSymbol(string symbol)
@@ -43,16 +43,16 @@ public class TInvestProvider : IDataProvider
     {
         try
         {
-            Console.WriteLine($"🟢 T-Invest: Запрос данных для {symbol}");
+            Console.WriteLine($"T-Invest: Запрос данных для {symbol}");
 
             var figi = await GetFigiAsync(symbol);
             if (string.IsNullOrEmpty(figi))
             {
-                Console.WriteLine($"⚠️ T-Invest: FIGI не найден для {symbol}");
+                Console.WriteLine($"T-Invest: FIGI не найден для {symbol}");
                 return new List<HistoricalPrice>();
             }
 
-            Console.WriteLine($"✅ T-Invest: FIGI для {symbol} = {figi}");
+            Console.WriteLine($"T-Invest: FIGI для {symbol} = {figi}");
 
             var interval = timeframe.ToLower() switch
             {
@@ -83,7 +83,7 @@ public class TInvestProvider : IDataProvider
 
             if (response.Candles.Count == 0)
             {
-                Console.WriteLine($"⚠️ T-Invest: Нет свечей для {symbol}");
+                Console.WriteLine($"T-Invest: Нет свечей для {symbol}");
                 return new List<HistoricalPrice>();
             }
 
@@ -104,7 +104,7 @@ public class TInvestProvider : IDataProvider
                 });
             }
 
-            Console.WriteLine($"✅ T-Invest: Загружено {prices.Count} свечей для {symbol}");
+            Console.WriteLine($"T-Invest: Загружено {prices.Count} свечей для {symbol}");
             return prices.OrderBy(p => p.Time).ToList();
         }
         catch (RpcException ex)
@@ -112,16 +112,16 @@ public class TInvestProvider : IDataProvider
             // Обработка ошибки 30006
             if (ex.StatusCode == StatusCode.InvalidArgument && ex.Message.Contains("30006"))
             {
-                Console.WriteLine($"❌ T-Invest: Инструмент {symbol} не найден (код 30006)");
+                Console.WriteLine($"T-Invest: Инструмент {symbol} не найден (код 30006)");
                 return new List<HistoricalPrice>();
             }
             
-            Console.WriteLine($"❌ T-Invest gRPC ошибка: {ex.StatusCode} - {ex.Message}");
+            Console.WriteLine($"T-Invest gRPC ошибка: {ex.StatusCode} - {ex.Message}");
             return new List<HistoricalPrice>();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ T-Invest ошибка: {ex.Message}");
+            Console.WriteLine($"T-Invest ошибка: {ex.Message}");
             return new List<HistoricalPrice>();
         }
     }
@@ -130,7 +130,7 @@ public class TInvestProvider : IDataProvider
     {
         try
         {
-            Console.WriteLine("🟢 T-Invest: Загрузка списка инструментов");
+            Console.WriteLine("T-Invest: Загрузка списка инструментов");
             
             var sharesResponse = await _client.Instruments.SharesAsync(new InstrumentsRequest());
             var instruments = new List<CoreInstrument>();
@@ -153,12 +153,12 @@ public class TInvestProvider : IDataProvider
                 }
             }
 
-            Console.WriteLine($"✅ T-Invest: Загружено {instruments.Count} инструментов");
+            Console.WriteLine($"T-Invest: Загружено {instruments.Count} инструментов");
             return instruments;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ T-Invest ошибка загрузки инструментов: {ex.Message}");
+            Console.WriteLine($"T-Invest ошибка загрузки инструментов: {ex.Message}");
             return new List<CoreInstrument>();
         }
     }
@@ -198,12 +198,12 @@ public class TInvestProvider : IDataProvider
                 return shareResponse.Instrument.Figi;
             }
             
-            Console.WriteLine($"⚠️ T-Invest: Инструмент {symbol} не найден");
+            Console.WriteLine($"T-Invest: Инструмент {symbol} не найден");
             return null;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠️ T-Invest: Ошибка поиска FIGI для {symbol}: {ex.Message}");
+            Console.WriteLine($"T-Invest: Ошибка поиска FIGI для {symbol}: {ex.Message}");
             return null;
         }
     }

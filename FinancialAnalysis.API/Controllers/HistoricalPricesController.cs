@@ -1,7 +1,5 @@
-using FinancialAnalysis.Core.Services;
-using FinancialAnalysis.Infrastructure.Data;
+using FinancialAnalysis.Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FinancialAnalysis.API.Controllers;
 
@@ -9,13 +7,11 @@ namespace FinancialAnalysis.API.Controllers;
 [Route("api/[controller]")]
 public class HistoricalPricesController : ControllerBase
 {
-    private readonly AppDbContext _context;
-    private readonly DataAggregator _aggregator;
+    private readonly IHistoricalPriceService _historicalPriceService;
 
-    public HistoricalPricesController(AppDbContext context, DataAggregator aggregator)
+    public HistoricalPricesController(IHistoricalPriceService historicalPriceService)
     {
-        _context = context;
-        _aggregator = aggregator;
+        _historicalPriceService = historicalPriceService;
     }
 
     /// <summary>
@@ -29,73 +25,9 @@ public class HistoricalPricesController : ControllerBase
     {
         try
         {
-            Console.WriteLine($"📥 Запрос: {symbol}, таймфрейм: {timeframe}, лимит: {limit}");
+            var prices = await _historicalPriceService.GetHistoricalDataAsync(symbol, timeframe, limit);
 
-            // 1. Находим инструмент
-            var instrument = await _context.Instruments
-                .FirstOrDefaultAsync(i => i.Symbol == symbol.ToUpper());
-
-            if (instrument == null)
-                return NotFound($"Инструмент {symbol} не найден");
-
-            // 2. Проверяем кеш в БД для данного таймфрейма
-            var cachedData = await _context.HistoricalPrices
-                .Where(h => h.InstrumentId == instrument.InstrumentId 
-                            && h.Timeframe == timeframe)
-                .OrderByDescending(h => h.Time)
-                .Take(limit)
-                .ToListAsync();
-
-            // 3. Если данные есть — возвращаем
-            if (cachedData.Any())
-            {
-                Console.WriteLine($"✅ Данные найдены в БД: {cachedData.Count} свечей (таймфрейм: {timeframe})");
-                return Ok(cachedData.OrderBy(h => h.Time).Select(h => new
-                {
-                    time = h.Time,
-                    open = h.Open,
-                    high = h.High,
-                    low = h.Low,
-                    close = h.Close,
-                    volume = h.Volume
-                }));
-            }
-
-            // 4. Если нет — загружаем из API
-            Console.WriteLine($"🔄 Данных в БД нет, загружаем из API...");
-            
-            var freshData = await _aggregator.GetHistoricalDataAsync(symbol, timeframe, limit);
-
-            if (!freshData.Any())
-            {
-                Console.WriteLine($"⚠️ API не вернул данных для {symbol} ({timeframe})");
-                return Ok(new List<object>());
-            }
-
-            // 5. Сохраняем данные в БД
-            var addedCount = 0;
-            foreach (var price in freshData)
-            {
-                price.InstrumentId = instrument.InstrumentId;
-                price.Timeframe = timeframe; // ← ВАЖНО: сохраняем переданный таймфрейм!
-
-                var existing = await _context.HistoricalPrices
-                    .FirstOrDefaultAsync(h => h.InstrumentId == instrument.InstrumentId
-                        && h.Time == price.Time
-                        && h.Timeframe == timeframe); // ← проверяем по таймфрейму
-
-                if (existing == null)
-                {
-                    await _context.HistoricalPrices.AddAsync(price);
-                    addedCount++;
-                }
-            }
-
-            await _context.SaveChangesAsync();
-            Console.WriteLine($"✅ Сохранено {addedCount} новых свечей для {symbol} ({timeframe})");
-
-            // 6. Возвращаем данные
-            return Ok(freshData.OrderBy(h => h.Time).Select(h => new
+            return Ok(prices.Select(h => new
             {
                 time = h.Time,
                 open = h.Open,
@@ -105,14 +37,16 @@ public class HistoricalPricesController : ControllerBase
                 volume = h.Volume
             }));
         }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
         catch (NotSupportedException ex)
         {
-            Console.WriteLine($"❌ Ошибка: {ex.Message}");
             return BadRequest($"Нет провайдера для {symbol}: {ex.Message}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ Ошибка: {ex.Message}");
             return StatusCode(500, $"Ошибка загрузки данных: {ex.Message}");
         }
     }
@@ -128,37 +62,16 @@ public class HistoricalPricesController : ControllerBase
     {
         try
         {
-            var instrument = await _context.Instruments
-                .FirstOrDefaultAsync(i => i.Symbol == symbol.ToUpper());
-
-            if (instrument == null)
-                return NotFound($"Инструмент {symbol} не найден");
-
-            var freshData = await _aggregator.GetHistoricalDataAsync(symbol, timeframe, limit);
-
-            if (!freshData.Any())
-                return Ok(new { message = "Нет новых данных", count = 0 });
-
-            var addedCount = 0;
-            foreach (var price in freshData)
+            var addedCount = await _historicalPriceService.RefreshDataAsync(symbol, timeframe, limit);
+            return Ok(new
             {
-                price.InstrumentId = instrument.InstrumentId;
-                price.Timeframe = timeframe; // ← сохраняем переданный таймфрейм
-
-                var existing = await _context.HistoricalPrices
-                    .FirstOrDefaultAsync(h => h.InstrumentId == instrument.InstrumentId
-                        && h.Time == price.Time
-                        && h.Timeframe == timeframe);
-
-                if (existing == null)
-                {
-                    await _context.HistoricalPrices.AddAsync(price);
-                    addedCount++;
-                }
-            }
-
-            await _context.SaveChangesAsync();
-            return Ok(new { message = $"Добавлено {addedCount} новых свечей", count = addedCount });
+                message = addedCount > 0 ? $"Добавлено {addedCount} новых свечей" : "Нет новых данных",
+                count = addedCount
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
         }
         catch (Exception ex)
         {

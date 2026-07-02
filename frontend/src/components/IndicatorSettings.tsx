@@ -24,8 +24,6 @@ interface IndicatorSettingsProps {
   theme: 'dark' | 'light';
 }
 
-const SMA_COLORS = ['#2962FF', '#FF6D00', '#E040FB', '#00BCD4', '#4CAF50', '#FF5722'];
-
 export const IndicatorSettings: React.FC<IndicatorSettingsProps> = ({
   smaList,
   onAddSMA,
